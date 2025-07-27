@@ -821,7 +821,7 @@
                 document.getElementById('saveBtnText').classList.add('d-none');
                 document.getElementById('saveBtnSpinner').classList.remove('d-none');
                 
-                const archive = JSON.parse(localStorage.getItem('staff-placement-archive') || [];
+                const archive = JSON.parse(localStorage.getItem('staff-placement-archive') || '[]';
                 const newItem = {
                     id: generateId(),
                     name: shiftName,
