@@ -366,629 +366,639 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <script>
-        // ====================== ИНИЦИАЛИЗАЦИЯ SUPABASE ======================
-        // ЗАМЕНИТЕ ЭТИ ЗНАЧЕНИЯ НА СВОИ ИЗ SUPABASE DASHBOARD
-        
-        const supabaseUrl = 'https://atasphfwrqsfrdemjvfx.supabase.co';
-        const supabaseKey = 'YOUR_SUPABASE_KEY'; // Замените на ваш реальный ключ
-        const supabase = createClient(supabaseUrl, supabaseKey, {
-            auth: {
-                persistSession: false,
-                autoRefreshToken: false
-            }
-        });
-        
-        // ====================== ДАННЫЕ ПРИЛОЖЕНИЯ ======================
-        const employees = [
-            "Арисов Александр", "Афанасьев Илья", "Божко Максим", "Бурхатова Надя", 
-            "Гордеев Артём", "Дегтярёв Дмитрий", "Дескин Дмитрий", "Дмитриев Андрей", 
-            "Дмитриус Марина", "Иконникова Марина", "Караулан Наташа", "Каримова Анна", 
-            "Кашицына Алина", "Ковынева Виктория", "Копылова Алина", "Кормильцына Мария", 
-            "Кутьин Андрей", "Летяго Валерия", "Лозовский Александр", "Михайлов Вова", 
-            "Никиточкина Евгения", "Паршина Полина", "Росляков Александр", "Русу Лилия", 
-            "Тезикова Анастасия", "Чернышова Татьяна", "Филимонова Полина", "Фокина Татьяна", 
-            "Фролова Ирина", "Чикунова Светлана", "Шабнова Анастасия", "Лемке Валентина"
-        ];
-        
-        const sections = [
-            "RUWI", "Джокер 1 круг приемки М2", "Джокер 2 круг приемки М2", "РАЗМЕЩЕНИЕ", 
-            "Возвраты (джокер)", "Возвраты (2 круг)", "Нулевая комната M2", "Нулевая комната К", 
-            "МВ (поиск потерянного товара)", "IS (54-55, батчи.)", "IS (поиск потерянного товара)", 
-            "NC(корпус K)", "Дамчут", "Поиск Missing_Putaway", "FWO", "Поиск Missing_Picking", 
-            "TS в отделе QA", "RQMI и 0052", "Отгрузка", "Not_found", "Тех. Локи", 
-            "Сортировка shipped", "REL"
-        ];
-        
-        // Состояние приложения
-        let state = {
-            available: [...employees],
-            vacation: [],
-            sickLeave: [],
-            dayOff: [],
-            assignments: {},
-            isCompactMode: false
-        };
-
-        // ====================== ОСНОВНЫЕ ФУНКЦИИ ======================
-        
-        // Инициализация таблицы участков
-        function initAssignmentTable() {
-            const tbody = document.getElementById('assignmentBody');
-            tbody.innerHTML = '';
-            
-            sections.forEach(section => {
-                state.assignments[section] = state.assignments[section] || [];
-                
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="section-column">${section}</td>
-                    <td class="employees-column dropzone" data-section="${section}"></td>
-                `;
-                tbody.appendChild(row);
-                
-                updateSectionEmployees(section);
-            });
-        }
-        
-        // Обновление сотрудников на участке
-        function updateSectionEmployees(section) {
-            const cell = document.querySelector(`td[data-section="${section}"]`);
-            cell.innerHTML = '';
-            
-            const employees = state.assignments[section] || [];
-            employees.forEach(employee => {
-                const empElement = createEmployeeElement(employee, section);
-                cell.appendChild(empElement);
-            });
-        }
-        
-        // Создание элемента сотрудника
-        function createEmployeeElement(employee, source) {
-            const div = document.createElement('div');
-            div.className = 'employee';
-            div.textContent = employee;
-            div.draggable = true;
-            div.dataset.employee = employee;
-            div.dataset.source = source;
-            
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'delete-btn';
-            deleteBtn.innerHTML = '<i class="bi bi-x"></i>';
-            deleteBtn.onclick = (e) => {
-                e.stopPropagation();
-                removeEmployee(employee, source);
-            };
-            
-            div.appendChild(deleteBtn);
-            
-            div.addEventListener('dragstart', dragStart);
-            
-            return div;
-        }
-        
-        // Инициализация списка доступных сотрудников
-        function initAvailableStaff() {
-            const container = document.getElementById('availableStaff');
-            container.innerHTML = '';
-            
-            state.available.forEach(employee => {
-                const empElement = createEmployeeElement(employee, 'available');
-                container.appendChild(empElement);
-            });
-            
-            updateCounters();
-        }
-        
-        // Инициализация списков отсутствующих сотрудников
-        function initUnavailableStaff() {
-            initUnavailableSection('vacation', 'vacationStaff');
-            initUnavailableSection('sickLeave', 'sickLeaveStaff');
-            initUnavailableSection('dayOff', 'dayOffStaff');
-        }
-        
-        function initUnavailableSection(stateKey, elementId) {
-            const container = document.getElementById(elementId);
-            container.innerHTML = '';
-            
-            state[stateKey].forEach(employee => {
-                const empElement = createEmployeeElement(employee, stateKey);
-                container.appendChild(empElement);
-            });
-            
-            updateCounters();
-        }
-        
-        // Обновление всех счетчиков
-        function updateCounters() {
-            document.getElementById('availableCounter').textContent = state.available.length;
-            document.getElementById('vacationCounter').textContent = state.vacation.length;
-            document.getElementById('sickLeaveCounter').textContent = state.sickLeave.length;
-            document.getElementById('dayOffCounter').textContent = state.dayOff.length;
-            
-            updateTotalCounters();
-        }
-        
-        // Обновление счетчика расставленного персонала
-        function updateTotalCounters() {
-            const totalAssigned = Object.values(state.assignments).reduce((sum, employees) => sum + employees.length, 0);
-            const unavailable = state.vacation.length + state.sickLeave.length + state.dayOff.length;
-            const totalAvailable = employees.length - unavailable;
-            
-            document.getElementById('totalAssignedCounter').textContent = totalAssigned;
-            document.getElementById('totalAvailableCounter').textContent = totalAvailable;
-        }
-        
-        // Drag and Drop функционал
-        function dragStart(e) {
-            e.dataTransfer.setData('text/plain', JSON.stringify({
-                employee: e.target.dataset.employee,
-                source: e.target.dataset.source
-            }));
-            e.dataTransfer.effectAllowed = 'move';
-            e.target.classList.add('dragging');
-        }
-        
-        function setupDropzones() {
-            const dropzones = document.querySelectorAll('.dropzone');
-            
-            dropzones.forEach(zone => {
-                zone.addEventListener('dragover', e => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    zone.classList.add('highlight');
-                });
-                
-                zone.addEventListener('dragleave', () => {
-                    zone.classList.remove('highlight');
-                });
-                
-                zone.addEventListener('drop', e => {
-                    e.preventDefault();
-                    zone.classList.remove('highlight');
-                    
-                    const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-                    const employee = data.employee;
-                    const source = data.source;
-                    const target = zone.id === 'availableStaff' ? 'available' : 
-                                   zone.id === 'vacationStaff' ? 'vacation' :
-                                   zone.id === 'sickLeaveStaff' ? 'sickLeave' :
-                                   zone.id === 'dayOffStaff' ? 'dayOff' : 
-                                   zone.dataset.section;
-                    
-                    moveEmployee(employee, source, target);
-                    
-                    document.querySelectorAll('.dragging').forEach(el => {
-                        el.classList.remove('dragging');
-                    });
-                });
-            });
-        }
-        
-        // Перемещение сотрудника
-        function moveEmployee(employee, source, target) {
-            if (source === target) return;
-            
-            removeEmployeeFromSource(employee, source);
-            
-            if (!addEmployeeToTarget(employee, target)) {
-                addEmployeeToTarget(employee, source);
+        // Дожидаемся загрузки всех скриптов
+        document.addEventListener('DOMContentLoaded', function() {
+            // Проверяем, что Supabase загрузился
+            if (typeof createClient === 'undefined') {
+                console.error('Supabase client not loaded');
+                showToast('Ошибка загрузки Supabase', 'danger');
                 return;
             }
+
+            // ====================== ИНИЦИАЛИЗАЦИЯ SUPABASE ======================
+            // ЗАМЕНИТЕ ЭТИ ЗНАЧЕНИЯ НА СВОИ ИЗ SUPABASE DASHBOARD
             
-            updateUIAfterMove(employee, source, target);
-            updateCounters();
-            
-            showToast(`${employee} перемещен`, 'success');
-        }
-        
-        function removeEmployeeFromSource(employee, source) {
-            if (source === 'available') {
-                state.available = state.available.filter(e => e !== employee);
-            } else if (source === 'vacation') {
-                state.vacation = state.vacation.filter(e => e !== employee);
-            } else if (source === 'sickLeave') {
-                state.sickLeave = state.sickLeave.filter(e => e !== employee);
-            } else if (source === 'dayOff') {
-                state.dayOff = state.dayOff.filter(e => e !== employee);
-            } else if (state.assignments[source]) {
-                state.assignments[source] = state.assignments[source].filter(e => e !== employee);
-            }
-        }
-        
-        function addEmployeeToTarget(employee, target) {
-            if (target === 'available') {
-                if (!state.available.includes(employee)) {
-                    state.available.push(employee);
-                    return true;
+            const supabaseUrl = 'https://atasphfwrqsfrdemjvfx.supabase.co';
+            const supabaseKey = 'YOUR_SUPABASE_KEY'; // Замените на ваш реальный ключ
+            const supabase = createClient(supabaseUrl, supabaseKey, {
+                auth: {
+                    persistSession: false,
+                    autoRefreshToken: false
                 }
-            } else if (target === 'vacation') {
-                if (!state.vacation.includes(employee)) {
-                    state.vacation.push(employee);
-                    return true;
-                }
-            } else if (target === 'sickLeave') {
-                if (!state.sickLeave.includes(employee)) {
-                    state.sickLeave.push(employee);
-                    return true;
-                }
-            } else if (target === 'dayOff') {
-                if (!state.dayOff.includes(employee)) {
-                    state.dayOff.push(employee);
-                    return true;
-                }
-            } else if (state.assignments[target]) {
-                const isAlreadyAssigned = Object.entries(state.assignments)
-                    .filter(([section, _]) => section !== target)
-                    .some(([_, employees]) => employees.includes(employee));
-                
-                if (!isAlreadyAssigned && !state.assignments[target].includes(employee)) {
-                    state.assignments[target].push(employee);
-                    return true;
-                } else if (isAlreadyAssigned) {
-                    showToast('Сотрудник уже назначен на другой участок!', 'warning');
-                    return false;
-                }
-            }
-            return true;
-        }
-        
-        function updateUIAfterMove(employee, source, target) {
-            if (source === 'available' || target === 'available') {
-                initAvailableStaff();
-            }
+            });
             
-            if (source === 'vacation' || target === 'vacation') {
-                initUnavailableSection('vacation', 'vacationStaff');
-            }
+            // ====================== ДАННЫЕ ПРИЛОЖЕНИЯ ======================
+            const employees = [
+                "Арисов Александр", "Афанасьев Илья", "Божко Максим", "Бурхатова Надя", 
+                "Гордеев Артём", "Дегтярёв Дмитрий", "Дескин Дмитрий", "Дмитриев Андрей", 
+                "Дмитриус Марина", "Иконникова Марина", "Караулан Наташа", "Каримова Анна", 
+                "Кашицына Алина", "Ковынева Виктория", "Копылова Алина", "Кормильцына Мария", 
+                "Кутьин Андрей", "Летяго Валерия", "Лозовский Александр", "Михайлов Вова", 
+                "Никиточкина Евгения", "Паршина Полина", "Росляков Александр", "Русу Лилия", 
+                "Тезикова Анастасия", "Чернышова Татьяна", "Филимонова Полина", "Фокина Татьяна", 
+                "Фролова Ирина", "Чикунова Светлана", "Шабнова Анастасия", "Лемке Валентина"
+            ];
             
-            if (source === 'sickLeave' || target === 'sickLeave') {
-                initUnavailableSection('sickLeave', 'sickLeaveStaff');
-            }
+            const sections = [
+                "RUWI", "Джокер 1 круг приемки М2", "Джокер 2 круг приемки М2", "РАЗМЕЩЕНИЕ", 
+                "Возвраты (джокер)", "Возвраты (2 круг)", "Нулевая комната M2", "Нулевая комната К", 
+                "МВ (поиск потерянного товара)", "IS (54-55, батчи.)", "IS (поиск потерянного товара)", 
+                "NC(корпус K)", "Дамчут", "Поиск Missing_Putaway", "FWO", "Поиск Missing_Picking", 
+                "TS в отделе QA", "RQMI и 0052", "Отгрузка", "Not_found", "Тех. Локи", 
+                "Сортировка shipped", "REL"
+            ];
             
-            if (source === 'dayOff' || target === 'dayOff') {
-                initUnavailableSection('dayOff', 'dayOffStaff');
-            }
-            
-            if (state.assignments[source]) {
-                updateSectionEmployees(source);
-            }
-            
-            if (state.assignments[target]) {
-                updateSectionEmployees(target);
-            }
-        }
-        
-        // Удаление сотрудника
-        function removeEmployee(employee, source) {
-            removeEmployeeFromSource(employee, source);
-            
-            if (!state.available.includes(employee)) {
-                state.available.push(employee);
-            }
-            
-            if (source === 'available') {
-                initAvailableStaff();
-            } else if (source === 'vacation') {
-                initUnavailableSection('vacation', 'vacationStaff');
-            } else if (source === 'sickLeave') {
-                initUnavailableSection('sickLeave', 'sickLeaveStaff');
-            } else if (source === 'dayOff') {
-                initUnavailableSection('dayOff', 'dayOffStaff');
-            } else if (state.assignments[source]) {
-                updateSectionEmployees(source);
-                initAvailableStaff();
-            }
-            
-            updateCounters();
-            showToast(`${employee} удален`, 'info');
-        }
-        
-        // Сброс всех данных
-        function resetAll() {
-            const modal = bootstrap.Modal.getInstance(document.getElementById('resetModal'));
-            modal.hide();
-            
-            state = {
+            // Состояние приложения
+            let state = {
                 available: [...employees],
                 vacation: [],
                 sickLeave: [],
                 dayOff: [],
                 assignments: {},
-                isCompactMode: state.isCompactMode
+                isCompactMode: false
             };
+
+            // ====================== ОСНОВНЫЕ ФУНКЦИИ ======================
             
-            initAssignmentTable();
-            initAvailableStaff();
-            initUnavailableStaff();
-            showToast('Все данные сброшены', 'success');
-        }
-        
-        // ====================== РАБОТА С SUPABASE ======================
-        
-        // Сохранение в Supabase
-        async function saveToCloud(shiftName, shiftData) {
-            try {
-                document.getElementById('saveBtnText').classList.add('d-none');
-                document.getElementById('saveBtnSpinner').classList.remove('d-none');
+            // Инициализация таблицы участков
+            function initAssignmentTable() {
+                const tbody = document.getElementById('assignmentBody');
+                tbody.innerHTML = '';
                 
-                const { data, error } = await supabase
-                    .from('shifts')
-                    .insert([{ 
-                        name: shiftName, 
-                        data: shiftData,
-                        created_at: new Date().toISOString() 
-                    }])
-                    .select();
-
-                if (error) throw error;
-                
-                showToast(`Смена "${shiftName}" сохранена`, 'success');
-                return true;
-            } catch (error) {
-                console.error("Ошибка сохранения:", error);
-                showToast('Ошибка сохранения: ' + error.message, 'danger');
-                return false;
-            } finally {
-                document.getElementById('saveBtnText').classList.remove('d-none');
-                document.getElementById('saveBtnSpinner').classList.add('d-none');
+                sections.forEach(section => {
+                    state.assignments[section] = state.assignments[section] || [];
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="section-column">${section}</td>
+                        <td class="employees-column dropzone" data-section="${section}"></td>
+                    `;
+                    tbody.appendChild(row);
+                    
+                    updateSectionEmployees(section);
+                });
             }
-        }
-        
-        // Загрузка из Supabase
-        async function loadFromCloud() {
-            try {
-                const { data, error } = await supabase
-                    .from('shifts')
-                    .select('*')
-                    .order('created_at', { ascending: false });
+            
+            // Обновление сотрудников на участке
+            function updateSectionEmployees(section) {
+                const cell = document.querySelector(`td[data-section="${section}"]`);
+                cell.innerHTML = '';
                 
-                if (error) throw error;
+                const employees = state.assignments[section] || [];
+                employees.forEach(employee => {
+                    const empElement = createEmployeeElement(employee, section);
+                    cell.appendChild(empElement);
+                });
+            }
+            
+            // Создание элемента сотрудника
+            function createEmployeeElement(employee, source) {
+                const div = document.createElement('div');
+                div.className = 'employee';
+                div.textContent = employee;
+                div.draggable = true;
+                div.dataset.employee = employee;
+                div.dataset.source = source;
                 
-                return data.map(item => ({
-                    id: item.id,
-                    name: item.name,
-                    date: new Date(item.created_at).toLocaleString(),
-                    data: item.data
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.innerHTML = '<i class="bi bi-x"></i>';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    removeEmployee(employee, source);
+                };
+                
+                div.appendChild(deleteBtn);
+                
+                div.addEventListener('dragstart', dragStart);
+                
+                return div;
+            }
+            
+            // Инициализация списка доступных сотрудников
+            function initAvailableStaff() {
+                const container = document.getElementById('availableStaff');
+                container.innerHTML = '';
+                
+                state.available.forEach(employee => {
+                    const empElement = createEmployeeElement(employee, 'available');
+                    container.appendChild(empElement);
+                });
+                
+                updateCounters();
+            }
+            
+            // Инициализация списков отсутствующих сотрудников
+            function initUnavailableStaff() {
+                initUnavailableSection('vacation', 'vacationStaff');
+                initUnavailableSection('sickLeave', 'sickLeaveStaff');
+                initUnavailableSection('dayOff', 'dayOffStaff');
+            }
+            
+            function initUnavailableSection(stateKey, elementId) {
+                const container = document.getElementById(elementId);
+                container.innerHTML = '';
+                
+                state[stateKey].forEach(employee => {
+                    const empElement = createEmployeeElement(employee, stateKey);
+                    container.appendChild(empElement);
+                });
+                
+                updateCounters();
+            }
+            
+            // Обновление всех счетчиков
+            function updateCounters() {
+                document.getElementById('availableCounter').textContent = state.available.length;
+                document.getElementById('vacationCounter').textContent = state.vacation.length;
+                document.getElementById('sickLeaveCounter').textContent = state.sickLeave.length;
+                document.getElementById('dayOffCounter').textContent = state.dayOff.length;
+                
+                updateTotalCounters();
+            }
+            
+            // Обновление счетчика расставленного персонала
+            function updateTotalCounters() {
+                const totalAssigned = Object.values(state.assignments).reduce((sum, employees) => sum + employees.length, 0);
+                const unavailable = state.vacation.length + state.sickLeave.length + state.dayOff.length;
+                const totalAvailable = employees.length - unavailable;
+                
+                document.getElementById('totalAssignedCounter').textContent = totalAssigned;
+                document.getElementById('totalAvailableCounter').textContent = totalAvailable;
+            }
+            
+            // Drag and Drop функционал
+            function dragStart(e) {
+                e.dataTransfer.setData('text/plain', JSON.stringify({
+                    employee: e.target.dataset.employee,
+                    source: e.target.dataset.source
                 }));
-            } catch (error) {
-                console.error("Ошибка загрузки:", error);
-                showToast('Ошибка загрузки: ' + error.message, 'danger');
-                return [];
+                e.dataTransfer.effectAllowed = 'move';
+                e.target.classList.add('dragging');
             }
-        }
-        
-        // Удаление из Supabase
-        async function deleteFromCloud(shiftId) {
-            try {
-                const { error } = await supabase
-                    .from('shifts')
-                    .delete()
-                    .eq('id', shiftId);
-
-                if (error) throw error;
+            
+            function setupDropzones() {
+                const dropzones = document.querySelectorAll('.dropzone');
                 
-                showToast('Смена удалена', 'success');
-                return true;
-            } catch (error) {
-                console.error("Ошибка удаления:", error);
-                showToast('Ошибка удаления: ' + error.message, 'danger');
-                return false;
-            }
-        }
-        
-        // Показать архив
-        async function showArchive() {
-            try {
-                const archiveList = document.getElementById('archiveList');
-                archiveList.innerHTML = '<p class="text-center my-3"><span class="loading-spinner"></span> Загрузка...</p>';
-                
-                const shifts = await loadFromCloud();
-                
-                archiveList.innerHTML = '';
-                
-                if (shifts.length === 0) {
-                    archiveList.innerHTML = '<p class="text-muted text-center my-3">Архив пуст</p>';
-                } else {
-                    shifts.forEach((item) => {
-                        const archiveItem = document.createElement('div');
-                        archiveItem.className = 'archive-item';
-                        archiveItem.innerHTML = `
-                            <div>
-                                <strong>${item.name}</strong>
-                                <div class="text-muted small">${item.date}</div>
-                            </div>
-                            <div class="archive-actions">
-                                <button data-id="${item.id}" class="btn btn-sm btn-outline-primary load-archive-btn">
-                                    <i class="bi bi-upload"></i>
-                                </button>
-                                <button data-id="${item.id}" class="btn btn-sm btn-outline-danger delete-archive-btn">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        `;
-                        archiveList.appendChild(archiveItem);
+                dropzones.forEach(zone => {
+                    zone.addEventListener('dragover', e => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        zone.classList.add('highlight');
                     });
+                    
+                    zone.addEventListener('dragleave', () => {
+                        zone.classList.remove('highlight');
+                    });
+                    
+                    zone.addEventListener('drop', e => {
+                        e.preventDefault();
+                        zone.classList.remove('highlight');
+                        
+                        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                        const employee = data.employee;
+                        const source = data.source;
+                        const target = zone.id === 'availableStaff' ? 'available' : 
+                                       zone.id === 'vacationStaff' ? 'vacation' :
+                                       zone.id === 'sickLeaveStaff' ? 'sickLeave' :
+                                       zone.id === 'dayOffStaff' ? 'dayOff' : 
+                                       zone.dataset.section;
+                        
+                        moveEmployee(employee, source, target);
+                        
+                        document.querySelectorAll('.dragging').forEach(el => {
+                            el.classList.remove('dragging');
+                        });
+                    });
+                });
+            }
+            
+            // Перемещение сотрудника
+            function moveEmployee(employee, source, target) {
+                if (source === target) return;
+                
+                removeEmployeeFromSource(employee, source);
+                
+                if (!addEmployeeToTarget(employee, target)) {
+                    addEmployeeToTarget(employee, source);
+                    return;
                 }
                 
-                const modal = new bootstrap.Modal(document.getElementById('archiveModal'));
-                modal.show();
-            } catch (error) {
-                console.error("Ошибка загрузки архива:", error);
-                showToast('Ошибка загрузки архива', 'danger');
-            }
-        }
-        
-        // Загрузка смены из архива
-        async function loadShiftFromArchive(shiftId) {
-            try {
-                const { data, error } = await supabase
-                    .from('shifts')
-                    .select('*')
-                    .eq('id', shiftId)
-                    .single();
-
-                if (error) throw error;
+                updateUIAfterMove(employee, source, target);
+                updateCounters();
                 
-                state.available = [...data.data.available];
-                state.vacation = [...data.data.vacation];
-                state.sickLeave = [...data.data.sickLeave];
-                state.dayOff = [...data.data.dayOff];
-                state.assignments = JSON.parse(JSON.stringify(data.data.assignments));
+                showToast(`${employee} перемещен`, 'success');
+            }
+            
+            function removeEmployeeFromSource(employee, source) {
+                if (source === 'available') {
+                    state.available = state.available.filter(e => e !== employee);
+                } else if (source === 'vacation') {
+                    state.vacation = state.vacation.filter(e => e !== employee);
+                } else if (source === 'sickLeave') {
+                    state.sickLeave = state.sickLeave.filter(e => e !== employee);
+                } else if (source === 'dayOff') {
+                    state.dayOff = state.dayOff.filter(e => e !== employee);
+                } else if (state.assignments[source]) {
+                    state.assignments[source] = state.assignments[source].filter(e => e !== employee);
+                }
+            }
+            
+            function addEmployeeToTarget(employee, target) {
+                if (target === 'available') {
+                    if (!state.available.includes(employee)) {
+                        state.available.push(employee);
+                        return true;
+                    }
+                } else if (target === 'vacation') {
+                    if (!state.vacation.includes(employee)) {
+                        state.vacation.push(employee);
+                        return true;
+                    }
+                } else if (target === 'sickLeave') {
+                    if (!state.sickLeave.includes(employee)) {
+                        state.sickLeave.push(employee);
+                        return true;
+                    }
+                } else if (target === 'dayOff') {
+                    if (!state.dayOff.includes(employee)) {
+                        state.dayOff.push(employee);
+                        return true;
+                    }
+                } else if (state.assignments[target]) {
+                    const isAlreadyAssigned = Object.entries(state.assignments)
+                        .filter(([section, _]) => section !== target)
+                        .some(([_, employees]) => employees.includes(employee));
+                    
+                    if (!isAlreadyAssigned && !state.assignments[target].includes(employee)) {
+                        state.assignments[target].push(employee);
+                        return true;
+                    } else if (isAlreadyAssigned) {
+                        showToast('Сотрудник уже назначен на другой участок!', 'warning');
+                        return false;
+                    }
+                }
+                return true;
+            }
+            
+            function updateUIAfterMove(employee, source, target) {
+                if (source === 'available' || target === 'available') {
+                    initAvailableStaff();
+                }
+                
+                if (source === 'vacation' || target === 'vacation') {
+                    initUnavailableSection('vacation', 'vacationStaff');
+                }
+                
+                if (source === 'sickLeave' || target === 'sickLeave') {
+                    initUnavailableSection('sickLeave', 'sickLeaveStaff');
+                }
+                
+                if (source === 'dayOff' || target === 'dayOff') {
+                    initUnavailableSection('dayOff', 'dayOffStaff');
+                }
+                
+                if (state.assignments[source]) {
+                    updateSectionEmployees(source);
+                }
+                
+                if (state.assignments[target]) {
+                    updateSectionEmployees(target);
+                }
+            }
+            
+            // Удаление сотрудника
+            function removeEmployee(employee, source) {
+                removeEmployeeFromSource(employee, source);
+                
+                if (!state.available.includes(employee)) {
+                    state.available.push(employee);
+                }
+                
+                if (source === 'available') {
+                    initAvailableStaff();
+                } else if (source === 'vacation') {
+                    initUnavailableSection('vacation', 'vacationStaff');
+                } else if (source === 'sickLeave') {
+                    initUnavailableSection('sickLeave', 'sickLeaveStaff');
+                } else if (source === 'dayOff') {
+                    initUnavailableSection('dayOff', 'dayOffStaff');
+                } else if (state.assignments[source]) {
+                    updateSectionEmployees(source);
+                    initAvailableStaff();
+                }
+                
+                updateCounters();
+                showToast(`${employee} удален`, 'info');
+            }
+            
+            // Сброс всех данных
+            function resetAll() {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('resetModal'));
+                modal.hide();
+                
+                state = {
+                    available: [...employees],
+                    vacation: [],
+                    sickLeave: [],
+                    dayOff: [],
+                    assignments: {},
+                    isCompactMode: state.isCompactMode
+                };
                 
                 initAssignmentTable();
                 initAvailableStaff();
                 initUnavailableStaff();
-                
-                const modal = bootstrap.Modal.getInstance(document.getElementById('archiveModal'));
-                modal.hide();
-                
-                showToast(`Смена "${data.name}" загружена`, 'success');
-            } catch (error) {
-                console.error("Ошибка загрузки смены:", error);
-                showToast('Ошибка загрузки смены', 'danger');
+                showToast('Все данные сброшены', 'success');
             }
-        }
-        
-        // Показать toast-уведомление
-        function showToast(message, type = 'info') {
-            const toastEl = document.createElement('div');
-            toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
-            toastEl.setAttribute('role', 'alert');
-            toastEl.setAttribute('aria-live', 'assertive');
-            toastEl.setAttribute('aria-atomic', 'true');
             
-            toastEl.innerHTML = `
-                <div class="d-flex">
-                    <div class="toast-body">
-                        ${message}
-                    </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-            `;
+            // ====================== РАБОТА С SUPABASE ======================
             
-            document.getElementById('toastContainer').appendChild(toastEl);
-            const toast = new bootstrap.Toast(toastEl);
-            toast.show();
-            
-            setTimeout(() => {
-                toastEl.remove();
-            }, 3000);
-        }
-        
-        // Переключение компактного режима
-        function toggleCompactMode() {
-            state.isCompactMode = !state.isCompactMode;
-            document.body.classList.toggle('compact-mode', state.isCompactMode);
-            
-            const icon = document.querySelector('#toggleCompact i');
-            if (state.isCompactMode) {
-                icon.classList.remove('bi-arrows-angle-contract');
-                icon.classList.add('bi-arrows-angle-expand');
-                showToast('Компактный режим включен', 'info');
-            } else {
-                icon.classList.remove('bi-arrows-angle-expand');
-                icon.classList.add('bi-arrows-angle-contract');
-                showToast('Компактный режим выключен', 'info');
-            }
-        }
-        
-        // Инициализация модальных окон
-        function initModals() {
-            // Архив
-            document.getElementById('archiveBtn').addEventListener('click', showArchive);
-            
-            // Сохранение
-            document.getElementById('saveBtn').addEventListener('click', () => {
-                const modal = new bootstrap.Modal(document.getElementById('saveModal'));
-                modal.show();
-                document.getElementById('shiftName').focus();
-            });
-            
-            document.getElementById('confirmSaveBtn').addEventListener('click', async () => {
-                const shiftName = document.getElementById('shiftName').value;
-                if (!shiftName.trim()) {
-                    showToast('Введите название смены', 'warning');
-                    return;
+            // Сохранение в Supabase
+            async function saveToCloud(shiftName, shiftData) {
+                try {
+                    document.getElementById('saveBtnText').classList.add('d-none');
+                    document.getElementById('saveBtnSpinner').classList.remove('d-none');
+                    
+                    const { data, error } = await supabase
+                        .from('shifts')
+                        .insert([{ 
+                            name: shiftName, 
+                            data: shiftData,
+                            created_at: new Date().toISOString() 
+                        }])
+                        .select();
+
+                    if (error) throw error;
+                    
+                    showToast(`Смена "${shiftName}" сохранена`, 'success');
+                    return true;
+                } catch (error) {
+                    console.error("Ошибка сохранения:", error);
+                    showToast('Ошибка сохранения: ' + error.message, 'danger');
+                    return false;
+                } finally {
+                    document.getElementById('saveBtnText').classList.remove('d-none');
+                    document.getElementById('saveBtnSpinner').classList.add('d-none');
                 }
-                
-                const shiftData = {
-                    available: [...state.available],
-                    vacation: [...state.vacation],
-                    sickLeave: [...state.sickLeave],
-                    dayOff: [...state.dayOff],
-                    assignments: JSON.parse(JSON.stringify(state.assignments))
-                };
-                
-                const success = await saveToCloud(shiftName, shiftData);
-                if (success) {
-                    document.getElementById('shiftName').value = '';
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('saveModal'));
+            }
+            
+            // Загрузка из Supabase
+            async function loadFromCloud() {
+                try {
+                    const { data, error } = await supabase
+                        .from('shifts')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+                    
+                    if (error) throw error;
+                    
+                    return data.map(item => ({
+                        id: item.id,
+                        name: item.name,
+                        date: new Date(item.created_at).toLocaleString(),
+                        data: item.data
+                    }));
+                } catch (error) {
+                    console.error("Ошибка загрузки:", error);
+                    showToast('Ошибка загрузки: ' + error.message, 'danger');
+                    return [];
+                }
+            }
+            
+            // Удаление из Supabase
+            async function deleteFromCloud(shiftId) {
+                try {
+                    const { error } = await supabase
+                        .from('shifts')
+                        .delete()
+                        .eq('id', shiftId);
+
+                    if (error) throw error;
+                    
+                    showToast('Смена удалена', 'success');
+                    return true;
+                } catch (error) {
+                    console.error("Ошибка удаления:", error);
+                    showToast('Ошибка удаления: ' + error.message, 'danger');
+                    return false;
+                }
+            }
+            
+            // Показать архив
+            async function showArchive() {
+                try {
+                    const archiveList = document.getElementById('archiveList');
+                    archiveList.innerHTML = '<p class="text-center my-3"><span class="loading-spinner"></span> Загрузка...</p>';
+                    
+                    const shifts = await loadFromCloud();
+                    
+                    archiveList.innerHTML = '';
+                    
+                    if (shifts.length === 0) {
+                        archiveList.innerHTML = '<p class="text-muted text-center my-3">Архив пуст</p>';
+                    } else {
+                        shifts.forEach((item) => {
+                            const archiveItem = document.createElement('div');
+                            archiveItem.className = 'archive-item';
+                            archiveItem.innerHTML = `
+                                <div>
+                                    <strong>${item.name}</strong>
+                                    <div class="text-muted small">${item.date}</div>
+                                </div>
+                                <div class="archive-actions">
+                                    <button data-id="${item.id}" class="btn btn-sm btn-outline-primary load-archive-btn">
+                                        <i class="bi bi-upload"></i>
+                                    </button>
+                                    <button data-id="${item.id}" class="btn btn-sm btn-outline-danger delete-archive-btn">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            `;
+                            archiveList.appendChild(archiveItem);
+                        });
+                    }
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('archiveModal'));
+                    modal.show();
+                } catch (error) {
+                    console.error("Ошибка загрузки архива:", error);
+                    showToast('Ошибка загрузки архива', 'danger');
+                }
+            }
+            
+            // Загрузка смены из архива
+            async function loadShiftFromArchive(shiftId) {
+                try {
+                    const { data, error } = await supabase
+                        .from('shifts')
+                        .select('*')
+                        .eq('id', shiftId)
+                        .single();
+
+                    if (error) throw error;
+                    
+                    state.available = [...data.data.available];
+                    state.vacation = [...data.data.vacation];
+                    state.sickLeave = [...data.data.sickLeave];
+                    state.dayOff = [...data.data.dayOff];
+                    state.assignments = JSON.parse(JSON.stringify(data.data.assignments));
+                    
+                    initAssignmentTable();
+                    initAvailableStaff();
+                    initUnavailableStaff();
+                    
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('archiveModal'));
                     modal.hide();
+                    
+                    showToast(`Смена "${data.name}" загружена`, 'success');
+                } catch (error) {
+                    console.error("Ошибка загрузки смены:", error);
+                    showToast('Ошибка загрузки смены', 'danger');
                 }
-            });
-            
-            // Сброс
-            document.getElementById('resetBtn').addEventListener('click', () => {
-                const modal = new bootstrap.Modal(document.getElementById('resetModal'));
-                modal.show();
-            });
-            
-            document.getElementById('confirmResetBtn').addEventListener('click', resetAll);
-            
-            // Обработчики для кнопок архива
-            document.addEventListener('click', (e) => {
-                if (e.target.closest('.load-archive-btn')) {
-                    const btn = e.target.closest('.load-archive-btn');
-                    loadShiftFromArchive(btn.dataset.id);
-                } else if (e.target.closest('.delete-archive-btn')) {
-                    const btn = e.target.closest('.delete-archive-btn');
-                    Swal.fire({
-                        title: 'Удалить смену?',
-                        text: "Вы уверены, что хотите удалить эту смену?",
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#d33',
-                        cancelButtonColor: '#3085d6',
-                        confirmButtonText: 'Да, удалить!',
-                        cancelButtonText: 'Отмена'
-                    }).then(async (result) => {
-                        if (result.isConfirmed) {
-                            await deleteFromCloud(btn.dataset.id);
-                            showArchive();
-                        }
-                    });
-                }
-            });
-        }
-        
-        // Инициализация приложения
-        async function init() {
-            initAssignmentTable();
-            initAvailableStaff();
-            initUnavailableStaff();
-            setupDropzones();
-            initModals();
-            updateTotalCounters();
-            
-            document.getElementById('toggleCompact').addEventListener('click', toggleCompactMode);
-            
-            // Проверка подключения к Supabase
-            try {
-                const { data, error } = await supabase
-                    .from('shifts')
-                    .select('*')
-                    .limit(1);
-                
-                if (error) throw error;
-                console.log('Подключение к Supabase успешно');
-            } catch (error) {
-                console.error('Ошибка подключения к Supabase:', error);
-                showToast('Ошибка подключения к Supabase', 'danger');
             }
-        }
-        
-        // Запуск приложения
-        document.addEventListener('DOMContentLoaded', init);
+            
+            // Показать toast-уведомление
+            function showToast(message, type = 'info') {
+                const toastEl = document.createElement('div');
+                toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+                toastEl.setAttribute('role', 'alert');
+                toastEl.setAttribute('aria-live', 'assertive');
+                toastEl.setAttribute('aria-atomic', 'true');
+                
+                toastEl.innerHTML = `
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                `;
+                
+                document.getElementById('toastContainer').appendChild(toastEl);
+                const toast = new bootstrap.Toast(toastEl);
+                toast.show();
+                
+                setTimeout(() => {
+                    toastEl.remove();
+                }, 3000);
+            }
+            
+            // Переключение компактного режима
+            function toggleCompactMode() {
+                state.isCompactMode = !state.isCompactMode;
+                document.body.classList.toggle('compact-mode', state.isCompactMode);
+                
+                const icon = document.querySelector('#toggleCompact i');
+                if (state.isCompactMode) {
+                    icon.classList.remove('bi-arrows-angle-contract');
+                    icon.classList.add('bi-arrows-angle-expand');
+                    showToast('Компактный режим включен', 'info');
+                } else {
+                    icon.classList.remove('bi-arrows-angle-expand');
+                    icon.classList.add('bi-arrows-angle-contract');
+                    showToast('Компактный режим выключен', 'info');
+                }
+            }
+            
+            // Инициализация модальных окон
+            function initModals() {
+                // Архив
+                document.getElementById('archiveBtn').addEventListener('click', showArchive);
+                
+                // Сохранение
+                document.getElementById('saveBtn').addEventListener('click', () => {
+                    const modal = new bootstrap.Modal(document.getElementById('saveModal'));
+                    modal.show();
+                    document.getElementById('shiftName').focus();
+                });
+                
+                document.getElementById('confirmSaveBtn').addEventListener('click', async () => {
+                    const shiftName = document.getElementById('shiftName').value;
+                    if (!shiftName.trim()) {
+                        showToast('Введите название смены', 'warning');
+                        return;
+                    }
+                    
+                    const shiftData = {
+                        available: [...state.available],
+                        vacation: [...state.vacation],
+                        sickLeave: [...state.sickLeave],
+                        dayOff: [...state.dayOff],
+                        assignments: JSON.parse(JSON.stringify(state.assignments))
+                    };
+                    
+                    const success = await saveToCloud(shiftName, shiftData);
+                    if (success) {
+                        document.getElementById('shiftName').value = '';
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('saveModal'));
+                        modal.hide();
+                    }
+                });
+                
+                // Сброс
+                document.getElementById('resetBtn').addEventListener('click', () => {
+                    const modal = new bootstrap.Modal(document.getElementById('resetModal'));
+                    modal.show();
+                });
+                
+                document.getElementById('confirmResetBtn').addEventListener('click', resetAll);
+                
+                // Обработчики для кнопок архива
+                document.addEventListener('click', (e) => {
+                    if (e.target.closest('.load-archive-btn')) {
+                        const btn = e.target.closest('.load-archive-btn');
+                        loadShiftFromArchive(btn.dataset.id);
+                    } else if (e.target.closest('.delete-archive-btn')) {
+                        const btn = e.target.closest('.delete-archive-btn');
+                        Swal.fire({
+                            title: 'Удалить смену?',
+                            text: "Вы уверены, что хотите удалить эту смену?",
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#d33',
+                            cancelButtonColor: '#3085d6',
+                            confirmButtonText: 'Да, удалить!',
+                            cancelButtonText: 'Отмена'
+                        }).then(async (result) => {
+                            if (result.isConfirmed) {
+                                await deleteFromCloud(btn.dataset.id);
+                                showArchive();
+                            }
+                        });
+                    }
+                });
+            }
+            
+            // Инициализация приложения
+            async function init() {
+                initAssignmentTable();
+                initAvailableStaff();
+                initUnavailableStaff();
+                setupDropzones();
+                initModals();
+                updateTotalCounters();
+                
+                document.getElementById('toggleCompact').addEventListener('click', toggleCompactMode);
+                
+                // Проверка подключения к Supabase
+                try {
+                    const { data, error } = await supabase
+                        .from('shifts')
+                        .select('*')
+                        .limit(1);
+                    
+                    if (error) throw error;
+                    console.log('Подключение к Supabase успешно');
+                } catch (error) {
+                    console.error('Ошибка подключения к Supabase:', error);
+                    showToast('Ошибка подключения к Supabase', 'danger');
+                }
+            }
+            
+            // Запуск приложения
+            init();
+        });
     </script>
 </body>
 </html>
