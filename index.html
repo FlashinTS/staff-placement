@@ -370,8 +370,12 @@
         // ЗАМЕНИТЕ ЭТИ ЗНАЧЕНИЯ НА СВОИ ИЗ SUPABASE DASHBOARD
         const supabaseUrl = 'https://atasphfwrqsfrdemjvfx.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0YXNwaGZ3cnFzZnJkZW1qdmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1NzEyMTAsImV4cCI6MjA2OTE0NzIxMH0.SanR-KyDFmLv4GDbiO4r1H0javFBAvOukY6RRjnyClk';
-        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
-
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  }
+});
         // ====================== ДАННЫЕ ПРИЛОЖЕНИЯ ======================
         const employees = [
             "Арисов Александр", "Афанасьев Илья", "Божко Максим", "Бурхатова Надя", 
